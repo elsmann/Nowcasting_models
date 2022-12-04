@@ -1,5 +1,3 @@
-"""Latent Conditioning Stack."""
-
 import tensorflow as tf
 import functools
 import sonnet as snt
@@ -12,6 +10,7 @@ class LatentCondStack(snt.Module):
     # for sonnet
     super().__init__()
 
+
     self._conv1 = layers.SNConv2D(output_channels=8, kernel_size=3)
     self._lblock1 = LBlock(output_channels=24, input_channels = 8)
     self._lblock2 = LBlock(output_channels=48, input_channels = 24)
@@ -23,10 +22,9 @@ class LatentCondStack(snt.Module):
 
     # Independent draws from a Normal distribution.
     h, w = resolution[0] // 32, resolution[1] // 32
-    # TODO increase deviation from default 1 to 2 when predicting
     z = tf.random.normal([batch_size, h, w, 8])
 
-      # 3x3 convolution.
+    # 3x3 convolution.
     z = self._conv1(z)
 
     # Three L Blocks to increase the number of channels to 24, 48, 192.
@@ -117,7 +115,7 @@ def attention_einsum(q, k, v):
 class Attention(snt.Module):
   """Attention module."""
 
-  def __init__(self, num_channels,  strategy=None, ratio_kq=8, ratio_v=8, conv=layers.Conv2D):
+  def __init__(self, num_channels, strategy=None, ratio_kq=8, ratio_v=8, conv=layers.Conv2D):
     """Constructor."""
     # for sonnet
     super().__init__()
@@ -134,17 +132,22 @@ class Attention(snt.Module):
     self._conv1 = conv(output_channels=self._num_channels,
       kernel_size=1, padding='VALID', use_bias=False)
 
+    # Learnable gain parameter
+    # self._gamma = tf.get_variable(
+    #   'miniattn_gamma', shape=[],
+    #  initializer=tf.initializers.zeros(tf.float32))
+
     # TF 2 alternative
     if strategy is not None:
-      print("strategy for gamme", strategy)
       with strategy.scope():
         self._gammainitializer = tf.zeros([], dtype=tf.dtypes.float32)
-        if not hasattr(self, "_gamma"):
+        #self._gamma = tf.Variable(self._gammainitializer, name='miniattn_gamma', shape=[])
+        if not hasattr(self, "_gamma"):  # Or set self.v to None in __init__
           self._gamma = tf.Variable(self._gammainitializer, name='_gamma', shape=[])
     else:
       print("no strategy for gamma")
       self._gammainitializer = tf.zeros([], dtype=tf.dtypes.float32)
-      if not hasattr(self, "_gamma"):
+      if not hasattr(self, "_gamma"):  # Or set self.v to None in __init__
         self._gamma = tf.Variable(self._gammainitializer, name='_gamma', shape=[])
 
 
@@ -156,8 +159,9 @@ class Attention(snt.Module):
 
     # Apply the attention operation.
     # out = ApplyAlongAxis_org(attention_einsum, axis=0)(query, key, value)
-    # TODO figure out if correct
+    # figure out why functools in needed
     out = layers.ApplyAlongAxis(functools.partial(attention_einsum, k=key, v=value), axis=0)(query)
+
     out = self._gamma * self._conv1(out)
 
     # Residual connection.

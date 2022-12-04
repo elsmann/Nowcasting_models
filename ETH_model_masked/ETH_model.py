@@ -87,13 +87,13 @@ class DGMR():
           data = train_iterator.get_next_as_optional()
           if not data.has_value():
             break
-          #train_loss = self.distributed_train_step(data.get_value())
-          #summed_disc_loss, summed_gen_loss = tf.split(train_loss, 2, axis=0)
-          #with self.writer.as_default():
-          #  tf.summary.scalar('Discriminator Loss', data=summed_disc_loss[0], step=tf.cast(step, tf.int64))
-          #  tf.summary.scalar('Generator Loss', data=summed_gen_loss[0], step=tf.cast(step, tf.int64))
-          #tf.print("isc_loss", summed_disc_loss)
-          #tf.print("gen_loss", summed_gen_loss)
+          train_loss = self.distributed_train_step(data.get_value())
+          summed_disc_loss, summed_gen_loss = tf.split(train_loss, 2, axis=0)
+          with self.writer.as_default():
+            tf.summary.scalar('Discriminator Loss', data=summed_disc_loss[0], step=tf.cast(step, tf.int64))
+            tf.summary.scalar('Generator Loss', data=summed_gen_loss[0], step=tf.cast(step, tf.int64))
+          tf.print("isc_loss", summed_disc_loss)
+          tf.print("gen_loss", summed_gen_loss)
 
           # save model weights
           if step % 200 == 0:
@@ -140,9 +140,10 @@ class DGMR():
             tf.print("valid_gen_loss", valid_gen_loss)
 
   def train_step(self, frames):
-      frames = tf.expand_dims(frames, -1)
       radar_frames = frames[0]
       eth_frames = frames[1]
+      radar_frames  = tf.expand_dims(radar_frames , -1)
+      eth_frames  = tf.expand_dims(eth_frames , -1)
       radar_batch_inputs, batch_targets = tf.split(radar_frames, [4, 18], axis=1)
       eth_batch_inputs, _ = tf.split(eth_frames, [4, 18], axis=1)
       real_sequence = tf.concat([radar_batch_inputs, batch_targets], axis=1)
@@ -182,10 +183,10 @@ class DGMR():
 
 
   def validation_step(self, frames):
-
-    frames = tf.expand_dims(frames, -1)
     radar_frames = frames[0]
     eth_frames = frames[1]
+    radar_frames = tf.expand_dims(radar_frames, -1)
+    eth_frames = tf.expand_dims(eth_frames, -1)
     radar_batch_inputs, batch_targets = tf.split(radar_frames, [4, 18], axis=1)
     eth_batch_inputs, _ = tf.split(eth_frames, [4, 18], axis=1)
     batch_predictions = self._generator(radar_batch_inputs, eth_batch_inputs)
@@ -215,8 +216,8 @@ class DGMR():
   def eval_image(self, frames, name, idx, save_target = False):
 
       if save_target:
-        frames_t = tf.expand_dims(frames, -1)
-        real_radar_sequence = frames_t[0]
+        frames = tf.expand_dims(frames, -1)
+        real_radar_sequence = frames[0]
         with self.writer.as_default():
           target = np.reshape(real_radar_sequence, (-1, 256, 256, 1))
           tf.summary.image(name + " Observation", target, max_outputs=50, step=idx)

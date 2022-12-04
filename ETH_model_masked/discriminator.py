@@ -195,8 +195,8 @@ class SpatialDiscriminator(snt.Module):
     Returns:
       A tensor with discriminator loss scalars [b].
     """
-    #print("..............IN SP DISCRIMINATOR..............")
-    #print("frames", np.nansum(frames))
+    print("..............IN SP DISCRIMINATOR..............")
+    print("frames", np.nansum(frames))
     b, n, h, w, c = frames.shape.as_list()
 
     # Process each of the n inputs independently.

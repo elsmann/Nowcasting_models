@@ -28,7 +28,7 @@ print("------Import successful------")
 #############
 Num_samples_per_input = 2  # default 6
 Epochs = 3
-Batch_size = 12
+Batch_size = 2
 Steps_per_epoch = 15
 Eval_step = 5
 load_old_weights = False
@@ -38,16 +38,19 @@ checkpoints_dir = '/ETH_training_checkpoints_00'
 ############
 
 base_directory = pathlib.Path(sys.argv[1])
-log_dir = sys.argv[2]
+validation_directory = pathlib.Path(sys.argv[2])
+
+log_dir = sys.argv[3]
 
 tf.config.run_functions_eagerly(False)
-if len(sys.argv) > 3:
-  if sys.argv[3] == "eager":
+if len(sys.argv) > 4:
+  if sys.argv[4] == "eager":
     tf.config.run_functions_eagerly(True)
     mirrored_strategy = tf.distribute.get_strategy()
     tf.print("Running with eager execution")
     tf.print("Running without distribution")
-
+  else:
+    tf.print(sys.argv[4], "is not a valid argument")
 else:
   mirrored_strategy = tf.distribute.MirroredStrategy()
   tf.print("Running with graph execution")
@@ -68,11 +71,11 @@ train_dataset = read_data.read_TFR(base_directory, ETH=True, batch_size=Batch_si
 train_dataset = mirrored_strategy.experimental_distribute_dataset(train_dataset)
 
 # validation dataset
-validation_dataset = read_data.read_TFR(base_directory, ETH=True, batch_size=Batch_size, window_shift=40, ISS=400)
+validation_dataset = read_data.read_TFR(validation_directory, ETH=True, batch_size=Batch_size, ISS=400)
 validation_dataset = mirrored_strategy.experimental_distribute_dataset(validation_dataset)
 
 # dataset visualising images
-image_set = read_data.read_TFR(base_directory, ETH=True, batch_size=1, window_shift=40, ISS=600)
+image_set = read_data.read_TFR(validation_directory, ETH=True, batch_size=1, window_shift=40, ISS=600)
 
 stamp = datetime.now().strftime("%m%d-%H%M")
 logdir = log_dir + "/func/ETH%s" % stamp + "B" + str(Batch_size)

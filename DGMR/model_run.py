@@ -1,21 +1,90 @@
 """ losses and model class"""
-import pathlib
 import tensorflow as tf
-import generator_ETH
+import generator
 import discriminator
-import read_data
 import sys
-from datetime import datetime
 import numpy as np
+import pathlib
+import read_data
+from datetime import datetime
 import os
+
+
+
+#############
+Num_samples_per_input = 2 # default 6
+Epochs = 6
+BATCH_SIZE = 12
+Steps_per_epoch = 1000000
+Eval_step = 800
+load_old_weights = True
+Save_weights = True
+checkpoints_dir = '/DGMR_training_checkpoints_35'
+
+tf.print("No Normalization used")
+
+############
+
+
+
+
+############
+
+train_directory = pathlib.Path(sys.argv[1])
+validation_directory = pathlib.Path(sys.argv[2])
+
+log_dir = sys.argv[3]
+
+tf.config.run_functions_eagerly(False)
+if len(sys.argv) > 4:
+  if sys.argv[4] == "eager":
+    tf.config.run_functions_eagerly(True)
+    mirrored_strategy = tf.distribute.get_strategy()
+    tf.print("Running with eager execution")
+    tf.print("Running without distribution")
+  else:
+    tf.print(sys.argv[4], "is not a valid argument")
+
+else:
+  mirrored_strategy = tf.distribute.MirroredStrategy()
+  tf.print("Running with graph execution")
+
+
+
+tf.print("Path of data used: {}".format(train_directory))
+tf.print("Path of log: {}".format(log_dir))
+tf.print("Checkpoints saved in {}".format(checkpoints_dir))
+tf.print("{} Epochs \n{} Samples per Input\n"
+        "{} Batch Size".format( Epochs, Num_samples_per_input, BATCH_SIZE))
+tf.print('Number of devices: {}'.format(mirrored_strategy.num_replicas_in_sync))
+tf.print(tf.config.list_physical_devices(
+    device_type=None
+))
+print("----------------------------------")
+
+# train dataset
+train_dataset = read_data.read_TFR(train_directory, batch_size=BATCH_SIZE, ISS = 200)
+train_dataset = mirrored_strategy.experimental_distribute_dataset(train_dataset)
+
+# validation dataset
+validation_dataset = read_data.read_TFR(validation_directory, batch_size=BATCH_SIZE)
+validation_dataset = mirrored_strategy.experimental_distribute_dataset(validation_dataset)
+
+# dataset visualising images
+image_set =  read_data.read_TFR(validation_directory, batch_size=1, window_shift=40, ISS = 1800)
+
+
+stamp = datetime.now().strftime("%m%d-%H%M")
+logdir = log_dir + "/func/%s" % stamp + "B" + str(BATCH_SIZE)
+writer = tf.summary.create_file_writer(logdir)
 
 
 
 class DGMR():
 
   def __init__(self, strategy = None,
-               generator_obj = None,
-                discriminator_obj = None,
+               generator_obj = generator.Generator(lead_time=90, time_delta=5, strategy = mirrored_strategy),
+                discriminator_obj = discriminator.Discriminator(),
                 generator_optimizer = tf.keras.optimizers.Adam(5e-5, beta_1=0.0), # adapted
                 discriminator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.0), # adapted
                 epochs=3, batch_size=12,
@@ -27,7 +96,6 @@ class DGMR():
     self._gen_op = generator_optimizer
     self._disc_op = discriminator_optimizer
     self._epochs = epochs
-    self.strategy = strategy
     self.batch_size = batch_size
     self.num_samples_per_input = num_samples_per_input
     self.steps_per_epoch = 10000000
@@ -38,7 +106,10 @@ class DGMR():
     tf.print("Epochs: {}, batch_size: {}, number of samples: {}"
              ", eval every {} steps".format(self._epochs, self.batch_size,
                                             self.num_samples_per_input, self.eval_step))
-    tf.print("Stragey:", self.strategy)
+    tf.print("Stragey:", mirrored_strategy)
+    tf.print("In scope: ", mirrored_strategy.extended.variable_created_in_scope(self._generator._sampler._latent_stack._mini_atten_block._gamma))
+
+
 
   # predicts 18 frames from input of four frames
   @tf.function
@@ -48,22 +119,19 @@ class DGMR():
 
   @tf.function
   def distributed_train_step(self, dataset_inputs):
-    per_replica_losses = self.strategy.run(self.train_step, args=(dataset_inputs,))
-    print("per rp loss", per_replica_losses)
-    x = self.strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
-    print("summed ", x)
-    return self.strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
+    per_replica_losses = mirrored_strategy.run(self.train_step, args=(dataset_inputs,))
+    x = mirrored_strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
+    return mirrored_strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
 
   @tf.function
   def distributed_validation_step(self, dataset_inputs):
-    per_replica_losses = self.strategy.run(self.validation_step, args=(dataset_inputs,))
-    print("per rp loss", per_replica_losses)
-    x = self.strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
-    print("summed ", x)
-    return self.strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
+    per_replica_losses = mirrored_strategy.run(self.validation_step, args=(dataset_inputs,))
+    x = mirrored_strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
+    return mirrored_strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
 
   def run(self, train_dataset, validation_dataset, example_images=None, ckpt_mg=None):
-    with self.strategy.scope():
+
+
       create_images = False
       if example_images is not None:
         create_images = True
@@ -87,16 +155,16 @@ class DGMR():
           data = train_iterator.get_next_as_optional()
           if not data.has_value():
             break
-          #train_loss = self.distributed_train_step(data.get_value())
-          #summed_disc_loss, summed_gen_loss = tf.split(train_loss, 2, axis=0)
-          #with self.writer.as_default():
-          #  tf.summary.scalar('Discriminator Loss', data=summed_disc_loss[0], step=tf.cast(step, tf.int64))
-          #  tf.summary.scalar('Generator Loss', data=summed_gen_loss[0], step=tf.cast(step, tf.int64))
-          #tf.print("isc_loss", summed_disc_loss)
-          #tf.print("gen_loss", summed_gen_loss)
+          train_loss = self.distributed_train_step(data.get_value())
+          summed_disc_loss, summed_gen_loss = tf.split(train_loss, 2, axis=0)
+          with self.writer.as_default():
+            tf.summary.scalar('Discriminator Loss', data=summed_disc_loss[0], step=tf.cast(step, tf.int64))
+            tf.summary.scalar('Generator Loss', data=summed_gen_loss[0], step=tf.cast(step, tf.int64))
+          tf.print("disc_loss", summed_disc_loss)
+          tf.print("gen_loss", summed_gen_loss)
 
           # save model weights
-          if step % 200 == 0:
+          if step % 500 == 0:
             if self.save_model:
               save_path = ckpt_mg.save()
               tf.print("Saved checkpoint for step {}: {}".format(int(step), save_path))
@@ -123,7 +191,7 @@ class DGMR():
             for valid_step in tf.range(self.num_valid):
               tf.print("Eval step", valid_step)
               valid_data = valid_iterator.get_next_as_optional()
-              if not data.has_value():
+              if not valid_data.has_value():
                 break
               loss_ = self.distributed_validation_step(valid_data.get_value())
               if first_loss:
@@ -141,15 +209,12 @@ class DGMR():
 
   def train_step(self, frames):
       frames = tf.expand_dims(frames, -1)
-      radar_frames = frames[0]
-      eth_frames = frames[1]
-      radar_batch_inputs, batch_targets = tf.split(radar_frames, [4, 18], axis=1)
-      eth_batch_inputs, _ = tf.split(eth_frames, [4, 18], axis=1)
-      real_sequence = tf.concat([radar_batch_inputs, batch_targets], axis=1)
+      batch_inputs, batch_targets = tf.split(frames, [4, 18], axis=1)
+      real_sequence = tf.concat([batch_inputs, batch_targets], axis=1)
       # train discriminator twice
       for _ in range(2):
-        batch_predictions = self._generator(radar_batch_inputs, eth_batch_inputs)
-        gen_sequence = tf.concat([radar_batch_inputs, batch_predictions], axis=1)
+        batch_predictions = self._generator(batch_inputs)
+        gen_sequence = tf.concat([batch_inputs, batch_predictions], axis=1)
         concat_inputs = tf.concat([real_sequence, gen_sequence], axis=0)
         with tf.GradientTape() as disc_tape:
           concat_outputs = self._discriminator(concat_inputs)
@@ -161,11 +226,10 @@ class DGMR():
       for _ in range(1):
         with tf.GradientTape() as gen_tape:
           gen_samples = [
-            self._generator(radar_batch_inputs, eth_batch_inputs) for _ in range(self.num_samples_per_input)]
+            self._generator(batch_inputs) for _ in range(self.num_samples_per_input)]
           grid_cell_reg_dist = self.grid_cell_regularizer_dist(tf.stack(gen_samples, axis=0),
                                                           batch_targets)
-          gen_sequences = [tf.concat([radar_batch_inputs, x], axis=1) for x in
-                           gen_samples]  # from here on numpys as tf tensors
+          gen_sequences = [tf.concat([batch_inputs, x], axis=1) for x in gen_samples]
           gen_real_sequences = [tf.concat([x, real_sequence], axis=0) for x in gen_sequences]
           # Excpect error in pseudocode:
           #  gen_disc_loss = loss_hinge_gen(tf.concat(gen_sequences, axis=0))
@@ -184,13 +248,11 @@ class DGMR():
   def validation_step(self, frames):
 
     frames = tf.expand_dims(frames, -1)
-    radar_frames = frames[0]
-    eth_frames = frames[1]
-    radar_batch_inputs, batch_targets = tf.split(radar_frames, [4, 18], axis=1)
-    eth_batch_inputs, _ = tf.split(eth_frames, [4, 18], axis=1)
-    batch_predictions = self._generator(radar_batch_inputs, eth_batch_inputs)
-    gen_sequence = tf.concat([radar_batch_inputs, batch_predictions], axis=1)
-    real_sequence = tf.concat([radar_batch_inputs, batch_targets], axis=1)
+    tf.print(frames.shape)
+    batch_inputs, batch_targets = tf.split(frames, [4, 18], axis=1)
+    batch_predictions = self._generator(batch_inputs)
+    gen_sequence = tf.concat([batch_inputs, batch_predictions], axis=1)
+    real_sequence = tf.concat([batch_inputs, batch_targets], axis=1)
     concat_inputs = tf.concat([real_sequence, gen_sequence], axis=0)
     concat_outputs = self._discriminator(concat_inputs)
     score_real, score_generated = tf.split(concat_outputs, 2, axis=0)
@@ -198,10 +260,10 @@ class DGMR():
     disc_loss = self.loss_hinge_disc_dist(score_generated, score_real)
 
     gen_samples = [
-      self._generator(radar_batch_inputs, eth_batch_inputs) for _ in range(self.num_samples_per_input)]
+      self._generator(batch_inputs) for _ in range(self.num_samples_per_input)]
     grid_cell_reg_dist = self.grid_cell_regularizer_dist(tf.stack(gen_samples, axis=0),
                                                     batch_targets)
-    gen_sequences = [tf.concat([radar_batch_inputs, x], axis=1) for x in gen_samples]
+    gen_sequences = [tf.concat([batch_inputs, x], axis=1) for x in gen_samples]
     gen_real_sequences = [tf.concat([x, real_sequence], axis=0) for x in gen_sequences]
     disc_output = [self._discriminator(x) for x in gen_real_sequences]
     gen_outputs = [tf.split(i, 2, axis=0)[0] for i in disc_output] # to only take output of gen samples
@@ -215,19 +277,16 @@ class DGMR():
   def eval_image(self, frames, name, idx, save_target = False):
 
       if save_target:
-        frames_t = tf.expand_dims(frames, -1)
-        real_radar_sequence = frames_t[0]
+        real_sequence = tf.expand_dims(frames, -1)
         with self.writer.as_default():
-          target = np.reshape(real_radar_sequence, (-1, 256, 256, 1))
+          target = np.reshape(real_sequence, (-1, 256, 256, 1))
           tf.summary.image(name + " Observation", target, max_outputs=50, step=idx)
 
-      frames = tf.expand_dims(frames, -1)
-      radar_frames = frames[0]
-      eth_frames = frames[1]
-      radar_inputs, _ = tf.split(radar_frames, [4, 18], axis=1)
-      eth_inputs, _ = tf.split(eth_frames, [4, 18], axis=1)
-      predictions = self._generator(radar_inputs, eth_inputs)
-      gen_sequence = tf.concat([radar_inputs, predictions], axis=1)
+      image = tf.expand_dims(frames, -1)
+      inputs, _ = tf.split(image, [4, 18], axis=1)
+      inputs = inputs
+      predictions=  self._generator(inputs)
+      gen_sequence = tf.concat([inputs, predictions], axis=1)
       with self.writer.as_default():
         generated = np.reshape(gen_sequence, (-1, 256, 256, 1))
         tf.summary.image(name, generated, max_outputs=50, step=idx)
@@ -240,13 +299,11 @@ class DGMR():
     loss = tf.reduce_sum(l1) * (1. / (self.batch_size * 2))
     l2 = tf.nn.relu(1. + score_generated)
     loss += tf.reduce_sum(l2) * (1. / (self.batch_size * 2))
-    tf.print("loss hinge_disc", loss)
     return loss
 
   def loss_hinge_gen_dist(self, score_generated):
     """Generator hinge loss."""
     loss = -tf.reduce_sum(score_generated) * (1. / (self.batch_size * 2 * self.num_samples_per_input))
-    tf.print("loss hinge_gen", loss)
     return loss
 
   def grid_cell_regularizer_dist(self, generated_samples, batch_targets):
@@ -263,10 +320,36 @@ class DGMR():
     loss = tf.reduce_mean(tf.math.abs(gen_mean - batch_targets) * weights,
                           axis=list(range(1, len(batch_targets.shape))))
     loss = tf.reduce_sum(loss) * (1 / self.batch_size)
-    tf.print("loss grid cell", loss)
 
     return loss
 
-  @property
-  def disc_op(self):
-    return self._disc_op
+
+
+
+
+with mirrored_strategy.scope():
+
+  model = DGMR( epochs=Epochs,batch_size= BATCH_SIZE , writer=writer, eval_step= Eval_step,
+                          save_model=Save_weights, num_samples_per_input= Num_samples_per_input)
+
+
+  checkpoint_dir = log_dir + checkpoints_dir
+  checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+  checkpoint = tf.train.Checkpoint(
+                                    generator_optimizer=model._gen_op,
+                                   discriminator_optimizer=model._disc_op,
+                                   generator=model._generator,
+                                   discriminator=model._discriminator
+                                   # add iterator?
+                                   )
+  manager = tf.train.CheckpointManager(checkpoint, checkpoint_dir , max_to_keep=3)
+  checkpoint.restore(manager.latest_checkpoint)
+  if manager.latest_checkpoint:
+      tf.print("Restored from {}".format(manager.latest_checkpoint))
+  else:
+      tf.print("Initializing from scratch.")
+
+
+  model.run(train_dataset=train_dataset, validation_dataset= validation_dataset,
+            example_images = image_set, ckpt_mg = manager)
+

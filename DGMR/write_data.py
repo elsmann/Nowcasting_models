@@ -34,7 +34,7 @@ end = pd.Timestamp(int(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6]))
 data_dir_radar = pathlib.Path(sys.argv[7])
 data_dir_eth = pathlib.Path(sys.argv[8])
 out_dir = pathlib.Path(sys.argv[9])
-ISS_value = 200
+ISS_value = 1000
 # The lower the Importance Sampling Scheme value the more frames will be included
 
 
@@ -121,7 +121,6 @@ def prepare_radar_h5_file(file, upper_row=300, lowest_row=556, left_column=241, 
     global Max_val_r
     if np.nanmax(image) > Max_val_r:
       Max_val_r = np.nanmax(image)
-
     image_sum = np.sum(image)
 
     if (np.isnan(image).any()):
@@ -165,7 +164,9 @@ def write_day_TRfile(df, file_path):
   if df.shape[0] != 12 * 24:
     raise AssertionError("Dataframe contains {r} instead of 12*24 rows".format(r=df.shape[0]))
   count_not_included = 0
+
   tf_record_options = tf.io.TFRecordOptions(compression_type="GZIP")
+
   with tf.io.TFRecordWriter(file_path, options=tf_record_options) as writer:
     frames = []
     # create value dictionary for every frame
@@ -182,11 +183,11 @@ def write_day_TRfile(df, file_path):
       elif bool(status_radar):
         print(row['date'], "has invalid ETH data")
         image_radar, image_sum_radar = prepare_radar_h5_file(row['file_radar_observed'])
-        image_eth = np.full([1, 1], 0, dtype=np.float32)
+        image_eth = np.full([256,256], 0, dtype=np.float32)
       else:
         print(row['date'], "has invalid radar (and possibly ETH) data")
-        image_eth = np.full([1, 1], 0, dtype=np.float32)
-        image_radar = np.full([1, 1], 0, dtype=np.float32)
+        image_eth = np.full([256, 256], 0, dtype=np.float32)
+        image_radar = np.full([256, 256], 0, dtype=np.float32)
         image_sum_radar = 0.0
 
       example = {'image_radar': image_radar, "image_sum_radar": image_sum_radar, "image_eth": image_eth,
@@ -200,6 +201,7 @@ def write_day_TRfile(df, file_path):
     for index in range(12 * 24):
       example = frames[index]
       event_sum = 0
+      print("status radar", bool(example['status_radar']))
       # if both ETH and radar or only radar data exist:
       if bool(example['status_radar']) :
         include = 1
@@ -222,13 +224,15 @@ def write_day_TRfile(df, file_path):
             if bool(example['status_both']) == False:
                 include = 2
           prob = 1 - math.exp(-(event_sum / (ISS_value* 12)))
-          prob = min(1.0, prob + 0.3)
+          prob = min(1.0, prob + 0.01)
           if prob < rng.random():
             include = 0
             count_not_included += 1
       # if no radar image
       else:
         include = 0
+
+      print("include", include)
 
       example_message = image_example(image_radar=example['image_radar'], image_eth=example['image_eth'],
                                         image_sum_radar=example['image_sum_radar'],
@@ -237,6 +241,7 @@ def write_day_TRfile(df, file_path):
                                         include= include,
                                         event_sum = event_sum,
                                         date=example['date'].encode())
+
 
       writer.write(example_message.SerializeToString())
 
@@ -303,4 +308,3 @@ def create_tfrecord_files(start,end):
 
 create_tfrecord_files(start,end)
 
-# TODO also calculate average and sd or max for normalizing

@@ -29,30 +29,34 @@ print("------Import successful------")
 Num_samples_per_input = 2 # default 6
 Epochs = 3
 BATCH_SIZE = 12
-Steps_per_epoch = 15
-Eval_step = 5
+Steps_per_epoch = 10000000
+Eval_step = 400
 load_old_weights = False
-Save_weights = False
-checkpoints_dir = '/DGMR_training_checkpoints_00'
+Save_weights = True
+checkpoints_dir = '/DGMR_training_checkpoints_01'
 
 ############
 
-base_directory =  pathlib.Path(sys.argv[1])
-log_dir = sys.argv[2]
+train_directory = pathlib.Path(sys.argv[1])
+validation_directory = pathlib.Path(sys.argv[2])
+
+log_dir = sys.argv[3]
 
 tf.config.run_functions_eagerly(False)
-if  len(sys.argv) > 3:
-  if sys.argv[3] == "eager":
+if len(sys.argv) > 4:
+  if sys.argv[4] == "eager":
     tf.config.run_functions_eagerly(True)
     mirrored_strategy = tf.distribute.get_strategy()
     tf.print("Running with eager execution")
     tf.print("Running without distribution")
+  else:
+    tf.print(sys.argv[4], "is not a valid argument")
 
 else:
   mirrored_strategy = tf.distribute.MirroredStrategy()
   tf.print("Running with graph execution")
 
-tf.print("Path of data used: {}".format(base_directory))
+tf.print("Path of data used: {}".format(train_directory))
 tf.print("Path of log: {}".format(log_dir))
 tf.print("Checkpoints saved in {}".format(checkpoints_dir))
 tf.print("{} Epochs \n{} Samples per Input\n"
@@ -64,15 +68,15 @@ tf.print(tf.config.list_physical_devices(
 print("----------------------------------")
 
 # train dataset
-train_dataset = read_data.read_TFR(base_directory, batch_size=BATCH_SIZE, ISS = 200)
+train_dataset = read_data.read_TFR(train_directory, batch_size=BATCH_SIZE, ISS = 200)
 train_dataset = mirrored_strategy.experimental_distribute_dataset(train_dataset)
 
 # validation dataset
-validation_dataset = read_data.read_TFR(base_directory, batch_size=BATCH_SIZE, window_shift=40, ISS = 400)
+validation_dataset = read_data.read_TFR(validation_directory, batch_size=BATCH_SIZE, window_shift=40, ISS = 400)
 validation_dataset = mirrored_strategy.experimental_distribute_dataset(validation_dataset)
 
 # dataset visualising images
-image_set =  read_data.read_TFR(base_directory, batch_size=1, window_shift=40, ISS = 600)
+image_set =  read_data.read_TFR(validation_directory, batch_size=1, window_shift=40, ISS = 600)
 
 
 stamp = datetime.now().strftime("%m%d-%H%M")

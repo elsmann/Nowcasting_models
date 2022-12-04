@@ -6,17 +6,6 @@ import sys
 import numpy as np
 
 
-mirrored_strategy = tf.distribute.MirroredStrategy()
-
-num_samples_per_input = 2 # default 6
-epochs = 1
-BATCH_SIZE = 12
-steps_per_epoch = 300
-eval_step = 1
-year = None
-random_train_data = False
-
-
 class DGMR():
 
   def __init__(self, strategy = None,
@@ -94,6 +83,7 @@ class DGMR():
         for step in tf.range(self.steps_per_epoch):
           tf.print(step, "step")
           data = train_iterator.get_next_as_optional()
+          print(data.get_value())
           if not data.has_value():
             break
           train_loss = self.distributed_train_step(data.get_value())
@@ -132,7 +122,7 @@ class DGMR():
             for valid_step in tf.range(self.num_valid):
               tf.print("Eval step", valid_step)
               valid_data = valid_iterator.get_next_as_optional()
-              if not data.has_value():
+              if not valid_data.has_value():
                 break
               loss_ = self.distributed_validation_step(valid_data.get_value())
               if first_loss:
@@ -189,6 +179,7 @@ class DGMR():
   def validation_step(self, frames):
 
     frames = tf.expand_dims(frames, -1)
+    tf.print(frames.shape)
     batch_inputs, batch_targets = tf.split(frames, [4, 18], axis=1)
     batch_predictions = self._generator(batch_inputs)
     gen_sequence = tf.concat([batch_inputs, batch_predictions], axis=1)
