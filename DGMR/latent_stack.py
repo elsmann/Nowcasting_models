@@ -99,18 +99,18 @@ class LBlock(snt.Module):
 
 
 
-def attention_einsum(q, k, v):
+def attention_einsum(query, key, value):
   """Apply the attention operator to tensors of shape [h, w, c]."""
 
   # Reshape 3D tensors to 2D tensor with first dimension L = h x w.
-  k = tf.reshape(k, [-1, k.shape[-1]])  # [h, w, c] -> [L, c]
-  v = tf.reshape(v, [-1, v.shape[-1]])  # [h, w, c] -> [L, c]
+  key = tf.reshape(k, [-1, key.shape[-1]])  # [h, w, c] -> [L, c]
+  value = tf.reshape(v, [-1, value.shape[-1]])  # [h, w, c] -> [L, c]
 
   # Einstein summation corresponding to the query * key operation.
-  beta = tf.nn.softmax(tf.einsum('hwc, Lc->hwL', q, k), axis=-1)
+  beta = tf.nn.softmax(tf.einsum('hwc, Lc->hwL', query, key), axis=-1)
 
   # Einstein summation corresponding to the attention * value operation.
-  out = tf.einsum('hwL, Lc->hwc', beta, v)
+  out = tf.einsum('hwL, Lc->hwc', beta, value)
   return out
 
 
