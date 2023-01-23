@@ -2,11 +2,12 @@
 
   Args:
     1: directory of TFR files
-    2: directory for tensorboard logs
-    3: Optional: if "eager": turns eager execution on for debugging purposes
+    2: directory of validation TFR files
+    3: directory for tensorboard logs
+    4: Optional: if "eager": turns eager execution on for debugging purposes
 
-    example: $HOME/TFR  $HOME/TFR/logs
-    example: $HOME/TFR  $HOME/TFR/logs eager """
+    example: $HOME/TFR/Train $HOME/TFR/Validation  $HOME/TFR/logs
+    example:  $HOME/TFR/Train $HOME/TFR/Validation eager """
 
 import pathlib
 import tensorflow as tf
@@ -29,7 +30,7 @@ print("------Import successful------")
 Num_samples_per_input = 3 
 Epochs = 3
 BATCH_SIZE = 12
-Steps_per_epoch = 10000000
+Steps_per_epoch = 1000000
 Eval_step = 400
 load_old_weights = False
 Save_weights = True
