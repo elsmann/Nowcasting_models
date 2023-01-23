@@ -12,13 +12,11 @@ https://github.com/deepmind/sonnet
 
 def downsample_avg_pool(x):
     """Utility function for downsampling by 2x2 average pooling."""
-    # return tf.layers.average_pooling2d(x, 2, 2, data_format='channels_last')
     return tf.nn.avg_pool2d(x, 2, 2, padding='VALID', data_format='NHWC')
 
 
 def downsample_avg_pool3d(x):
     """Utility function for downsampling by 2x2 average pooling."""
-    # return tf.layers.average_pooling3d(x, 2, 2, data_format='channels_last')
     return tf.nn.avg_pool3d(x, 2, 2, padding='VALID', data_format='NDHWC')
 
 
@@ -82,32 +80,6 @@ class SpectralNormalizer(snt.Module):
             weights.assign(weights / sigma)
         return weights
 
-
-# class SNConv2D(Conv2D):
-#  """2D convolution with spectral normalisation."""
-
-#  def __init__(self, output_channels, kernel_size, stride=1, rate=1,
-#               padding='SAME', sn_eps=0.0001, use_bias=True, name=None, w_init = snt.initializers.Orthogonal(), is_training=True):
-
-#    super().__init__(output_channels,\
-#                    kernel_size= kernel_size, stride = stride, rate = rate, \
-#                    padding=padding, use_bias = use_bias)
-
-#    self.spectral_normalizer = SpectralNormalizer(epsilon= sn_eps)
-
-
-# so I need to add is_trainig to call function?
-
-#  def __call__(self, tensor):
-
-
-# call conv2d with tensor, so it initilaizes weights
-#    super().conv_2D._initialize(tensor)
-
-#    normed_weights= self.spectral_normalizer(super().conv_2D.w, is_training=is_training)
-#    output = tf.matmul(tensor, normed_weights)
-#    return output
-
 class SNConv2D(snt.Module):
     """2D convolution with spectral normalisation."""
 
@@ -129,18 +101,6 @@ class SNConv2D(snt.Module):
     def __call__(self, tensor, is_training=True):
         self.conv_2D._initialize(tensor)
         normed_weights = self.spectral_normalizer(self.conv_2D.w, is_training=is_training)
-
-        # output = tf.matmul(tensor, normed_weights)
-        # use confultional instead of matmul bc shapes don't match so it doesnt work
-        # and other keras implementation also uses conv layer for this
-        # change to use sonnet instead of tf conv, need to convert output then though
-        #    output = snt.Conv2D(
-        #          tensor,
-        #          normed_weights,
-        #          stride=self.stride,
-        #          padding=self.padding,
-        #          rate=self.rate,
-        #          data_format=self.data_format)
 
         output = tf.nn.convolution(
             tensor,
