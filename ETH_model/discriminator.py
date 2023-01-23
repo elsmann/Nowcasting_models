@@ -50,10 +50,7 @@ class Discriminator(snt.Module):
 
     # Compute the average spatial discriminator score for each of 8 picked time
     # steps.
-   # print("frames for sd", np.nansum(frames_for_sd))
     sd_out = self._spatial_discriminator(frames_for_sd)
-    #print("OUTPUT sd", np.nansum(sd_out))
-    #print("OUTPUT sd", sd_out)
 
 
     # Prepare the frames for temporal discriminator: choose the offset of a
@@ -71,8 +68,6 @@ class Discriminator(snt.Module):
 
     # Compute the average temporal discriminator score over length 5 sequences.
     td_out = self._temporal_discriminator(frames_for_td)
-    #print("td out", td_out)
-    #print("sd out", sd_out)
 
     return tf.concat([sd_out, td_out], 1)
 
@@ -122,7 +117,6 @@ class DBlock(snt.Module):
     Returns:
       A tensor with discriminator loss scalars [b].
     """
-   # print("input dblock", np.nansum(inputs))
 
     h0 = inputs
 
@@ -132,24 +126,16 @@ class DBlock(snt.Module):
 
     # First convolution.
     input_channels = h0.shape.as_list()[-1]
-    # changed num_channels to output_channels
     h1 = self._conv1(h0)
     h1 = self._activation(h1)
-    #print("h1", h1)
-   # print("h1", np.nansum(h1))
-
 
     # Second convolution.
-    # changed num_channels to output_channels
     h2 = self._conv2(h1)
-    #print("h2", h2)
-   # print("h2", np.nansum(h2))
 
 
     # Downsampling.
     if self._downsample:
       h2 = self._pooling(h2)
-     # print("pooling h2", np.nansum(h2))
 
     # The residual connection, make sure it has the same dimensionality
     # with additional 1x1 convolution and downsampling if needed.
@@ -161,13 +147,7 @@ class DBlock(snt.Module):
     else:
       sc = inputs
 
-   # print("sc", np.nansum(sc))
-
-
-
     # Residual connection.
-   # print("h2 + sc", np.nansum(h2 + sc))
-
     return h2 + sc
 
 class SpatialDiscriminator(snt.Module):
@@ -195,8 +175,6 @@ class SpatialDiscriminator(snt.Module):
     Returns:
       A tensor with discriminator loss scalars [b].
     """
-    #print("..............IN SP DISCRIMINATOR..............")
-    #print("frames", np.nansum(frames))
     b, n, h, w, c = frames.shape.as_list()
 
     # Process each of the n inputs independently.
@@ -204,12 +182,10 @@ class SpatialDiscriminator(snt.Module):
 
     # Space-to-depth stacking from 128x128x1 to 64x64x4.
     frames = tf.nn.space_to_depth(frames, block_size=2)
-    print("frames1", np.nansum(frames))
 
     # Five residual D Blocks to halve the resolution of the image and double
     # the number of channels.
     y = self._block1(frames)
-    print("y0", np.nansum(y))
     y = self._block2(y)
     y = self._block3(y)
     y = self._block4(y)
@@ -217,12 +193,9 @@ class SpatialDiscriminator(snt.Module):
 
     # One more D Block without downsampling or increase in number of channels.
     y = self._block6(y)
-    print("y", np.nansum(y))
     # Sum-pool the representations and feed to spectrally normalized lin. layer.
     y = tf.reduce_sum(tf.nn.relu(y), axis=[1, 2])
-    print("reduce sum", np.nansum(y))
     y = self._bn(y)
-    # TODO shouldn't this be spectrally normalized?
     output = self._linear(y)
     print("output0", np.nansum(output))
 
@@ -230,7 +203,6 @@ class SpatialDiscriminator(snt.Module):
     # (1 - score_real) and (1 + score_generated) in the loss.
     output = tf.reshape(output, [b, n, 1])
     output = tf.reduce_sum(output, keepdims=True, axis=1)
-    print("output1", np.nansum(output))
 
     return output
 
