@@ -160,8 +160,6 @@ class Sampler(snt.Module):
     hs = [z] * self._num_predictions
 
     # Layer 4 (bottom-most).
-    # why can we change this to this?
-    # hs, _ = tf.nn.static_rnn(self._conv_gru4, hs, init_state_4)
     hs = tf.stack(hs)
     hs, _ = snt.static_unroll(self._conv_gru4, hs, init_state_4)
     hs = tf.unstack(hs)
