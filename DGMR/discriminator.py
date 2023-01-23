@@ -126,7 +126,7 @@ class DBlock(snt.Module):
 
     # First convolution.
     input_channels = h0.shape.as_list()[-1]
-    # TODO changed num_channels to output_channels instead of input_channels
+    # Changed num_channels to output_channels instead of input_channels
     h1 = self._conv1(h0)
     h1 = self._activation(h1)
 
