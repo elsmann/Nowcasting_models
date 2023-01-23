@@ -1,12 +1,13 @@
 """Run DGMR model
 
   Args:
-    1: directory of TFR files
-    2: directory for tensorboard logs
-    3: Optional: if "eager": turns eager execution on for debugging purposes
+    1: directory of training TFR files
+    2: directory of validation TFR files
+    3: directory for tensorboard logs
+    4: Optional: if "eager": turns eager execution on for debugging purposes
 
-    example: $HOME/TFR  $HOME/TFR/logs
-    example: $HOME/TFR  $HOME/TFR/logs eager """
+    example: $HOME/TFR/Train $HOME/TFR/Validation $HOME/TFR/logs
+    example:  $HOME/TFR/Train $HOME/TFR/Validation $HOME/TFR/logs eager """
 
 import pathlib
 import tensorflow as tf
@@ -26,14 +27,14 @@ print("------Import successful------")
 ###  Training parameters ####
 
 #############
-Num_samples_per_input = 2  # default 6
+Num_samples_per_input = 2 
 Epochs = 3
 Batch_size = 2
 Steps_per_epoch = 15
 Eval_step = 5
 load_old_weights = False
 Save_weights = False
-checkpoints_dir = '/ETH_training_checkpoints_00'
+checkpoints_dir = '/ETH_training_checkpoints_01'
 
 ############
 
