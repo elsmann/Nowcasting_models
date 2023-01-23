@@ -13,13 +13,11 @@ Spectral Normalizer layer  from https://github.com/deepmind/sonnet/blob/v2/examp
 
 def downsample_avg_pool(x):
     """Utility function for downsampling by 2x2 average pooling."""
-    # changed from tf.layers.average_pooling2d(x, 2, 2, data_format='channels_last')
     return tf.nn.avg_pool2d(x, 2, 2, padding='VALID', data_format='NHWC')
 
 
 def downsample_avg_pool3d(x):
     """Utility function for downsampling by 2x2 average pooling."""
-    # changed from tf.layers.average_pooling3d(x, 2, 2, data_format='channels_last')
     return tf.nn.avg_pool3d(x, 2, 2, padding='VALID', data_format='NDHWC')
 
 
@@ -107,9 +105,8 @@ class SNConv2D(snt.Module):
         normed_weights = self.spectral_normalizer(self.conv_2D.w, is_training=is_training)
 
         # output = tf.matmul(tensor, normed_weights)
-        # TODO used convolutional instead of matmul bc shapes don't match so it doesnt work
+        # used convolutional instead of matmul bc shapes don't match so it doesnt work
         # other keras implementation also uses conv layer for this
-        # change to use sonnet instead of tf conv, need to convert output then though
         #    output = snt.Conv2D(
         #          tensor,
         #          normed_weights,
@@ -208,7 +205,7 @@ class ApplyAlongAxis:
         self._axis = axis
 
     def __call__(self, inputs):
-        # apperently lsit comprehension not needed
+        # apperently list comprehension not needed
         # split_inputs = [tf.unstack(arg, axis=self._axis) for arg in args]
         #  res = [self._operation(x) for x in zip(*split_inputs)]
         split_inputs = tf.unstack(inputs, axis=self._axis)
