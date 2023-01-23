@@ -76,21 +76,6 @@ def check_radar_h5_file(file):
     return file_okay
 
 
-def check_eth_h5_file(file):
-  file_okay = 0
-  try:
-    f = h5py.File(file, 'r')
-    image = f['image1']['image_data']
-    image = np.asarray(image)
-    x = image != 255
-    if np.any(x):
-      file_okay = 1
-    f.close()
-  except:
-    pass
-
-  return file_okay
-
 def prepare_eth_h5_file(file, upper_row=300, lowest_row=556, left_column=241, right_column=497 ):
     f = h5py.File(file, 'r')
     image = f['image1']['image_data']
@@ -223,7 +208,7 @@ def write_day_TRfile(df, file_path):
             # if radar data okay but ETH not
             if bool(example['status_both']) == False:
                 include = 2
-          prob = 1 - math.exp(-(event_sum / (ISS_value* 12)))
+          prob = 1 - math.exp(-(event_sum / (ISS_value)))
           prob = min(1.0, prob + 0.01)
           if prob < rng.random():
             include = 0
