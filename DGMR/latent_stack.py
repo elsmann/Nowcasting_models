@@ -155,9 +155,7 @@ class Attention(snt.Module):
     value = self._value(tensor)
 
     # Apply the attention operation.
-    # out = ApplyAlongAxis_org(attention_einsum, axis=0)(query, key, value)
-    # TODO figure out if correct
-    out = layers.ApplyAlongAxis(functools.partial(attention_einsum, k=key, v=value), axis=0)(query)
+    out = layers.ApplyAlongAxis(functools.partial(attention_einsum, key=key, value=value), axis=0)(query)
     out = self._gamma * self._conv1(out)
 
     # Residual connection.
