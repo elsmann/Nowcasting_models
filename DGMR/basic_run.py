@@ -26,7 +26,7 @@ print("------Import successful------")
 ###  Training parameters ####
 
 #############
-Num_samples_per_input = 2 # default 6
+Num_samples_per_input = 3 
 Epochs = 3
 BATCH_SIZE = 12
 Steps_per_epoch = 10000000
